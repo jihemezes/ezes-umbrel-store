@@ -1,0 +1,38 @@
+# ============================================================
+# Trafic Toulouse — composition Umbrel
+# La cle TomTom peut etre saisie directement dans le navigateur
+# a la premiere visite (recommande), ou renseignee ci-dessous
+# pour qu'elle soit partagee par tous les appareils du foyer.
+#
+# Reglages modifiables SANS toucher a ce fichier : une fois l'app
+# installee, un dossier "data" apparait dans le gestionnaire de
+# fichiers Umbrel (Applications > Trafic Toulouse > data), avec
+# un fichier settings.env pret a editer. Toute modification y est
+# reprise automatiquement en quelques secondes (juste recharger
+# la page du navigateur), sans avoir a toucher a ce compose ni a
+# redemarrer l'application.
+# ============================================================
+services:
+  app_proxy:
+    environment:
+      APP_HOST: ezes-trafic-toulouse_web_1
+      APP_PORT: 80
+      PROXY_AUTH_ADD: "false"
+
+  web:
+    image: ghcr.io/jihemezes/trafic-toulouse:latest
+    restart: on-failure
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+    environment:
+      TOMTOM_API_KEY: ""   # optionnel : saisie possible a la premiere visite
+      MAP_API_KEY: ""      # cle API gratuite des fonds CARTO (carto.com/basemaps/apikey)
+      MAP_LAT: "43.6045"
+      MAP_LON: "1.4442"
+      MAP_ZOOM: "12"
+      REFRESH_INTERVAL_S: "60"
+      TRAFFIC_STYLE: "relative0"
+      FLOW_THICKNESS: "7"
+      SHOW_INCIDENTS: "false"
+      SHOW_JAMS: "true"
+      CITY_LABEL: "Toulouse"

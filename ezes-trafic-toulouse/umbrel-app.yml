@@ -1,0 +1,70 @@
+manifestVersion: 1
+id: ezes-trafic-toulouse
+category: networking
+name: City Road Traffic
+version: "1.4.1"
+icon: https://raw.githubusercontent.com/jihemezes/ezes-umbrel-store/main/ezes-trafic-toulouse/icon.svg
+tagline: Carte du trafic routier en temps réel · Live road traffic map
+description: >-
+  🇫🇷 FRANÇAIS
+
+  Carte plein écran du trafic routier de l'agglomération toulousaine
+  (ou de toute autre ville, sélectionnable par nom ou code postal).
+
+  Les bouchons et ralentissements sont visibles en permanence :
+  coloration des axes selon la fluidité, et tracé cliquable de chaque
+  bouchon avec son retard estimé. Les autres incidents (travaux,
+  fermetures, accidents) sont affichables à la demande.
+
+  Rafraîchissement automatique paramétrable, bascule jour/nuit calée
+  sur le lever et le coucher du soleil, réglages modifiables sans
+  redémarrage via le fichier data/settings.env (gestionnaire de
+  fichiers Umbrel). Interface disponible en français et en anglais
+  (français par défaut).
+
+  Données trafic TomTom : une clé API gratuite est requise
+  (developer.tomtom.com) — elle peut être saisie directement dans le
+  navigateur à la première visite.
+
+
+  🇬🇧 ENGLISH
+
+  Full-screen live road traffic map for the Toulouse metropolitan area
+  (or any other city, selectable by name or postal code).
+
+  Traffic jams and slowdowns are always visible: roads colored by
+  flow speed, plus a clickable trace for each jam showing its
+  estimated delay. Other incidents (roadworks, closures, accidents)
+  can be shown on demand.
+
+  Configurable auto-refresh, automatic day/night base map switching
+  based on local sunrise and sunset, settings adjustable without a
+  restart via the data/settings.env file (Umbrel file manager).
+  Interface available in French and English (French by default).
+
+  TomTom traffic data: a free API key is required
+  (developer.tomtom.com) — it can be entered directly in the browser
+  on first visit.
+developer: Jean-Michel EZES
+website: https://jmezes.fr
+repo: https://github.com/jihemezes/trafic-toulouse
+support: https://github.com/jihemezes/trafic-toulouse/issues
+port: 8480
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+releaseNotes: >-
+  FR — Correctif 1.4.1 : la clé du fond de carte utilise désormais CARTO (et non plus MapTiler). Nouveau : saisie de la clé API gratuite des fonds de carte CARTO
+  (carto.com/basemaps/apikey), désormais exigée par CARTO sous peine de
+  filigrane « API key required ». Dans Paramètres, avec les mêmes
+  mécanismes que la clé TomTom (navigateur ou settings.env /
+  MAP_API_KEY).
+
+  EN — New: entry of the free CARTO basemaps API key
+  (carto.com/basemaps/apikey), now required by CARTO to avoid an
+  "API key required" watermark. In Settings, using the same mechanisms
+  as the TomTom key (browser or settings.env / MAP_API_KEY).
+dependencies: []
+submitter: Jean-Michel EZES
+submission: https://github.com/jihemezes/trafic-toulouse
