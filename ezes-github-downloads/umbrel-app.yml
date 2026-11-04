@@ -1,0 +1,34 @@
+manifestVersion: 1
+id: ezes-github-downloads
+category: developer
+name: GitHub Downloads
+version: "1.0.0"
+tagline: Combien de fois vos releases GitHub ont-elles été téléchargées ?
+icon: https://raw.githubusercontent.com/jihemezes/ezes-umbrel-store/main/ezes-github-downloads/icon.svg
+description: >-
+  Relève automatiquement le nombre de téléchargements de chaque asset de chaque
+  release de tous les dépôts d'un compte ou d'une organisation GitHub, garde
+  l'historique et l'affiche dans un tableau de bord : total, classement des
+  assets, répartition par dépôt, évolution dans le temps et progression depuis
+  le dernier relevé.
+
+
+  Au premier lancement, indiquez simplement le compte GitHub à analyser. Un
+  token est facultatif (il permet d'inclure vos dépôts privés et d'éviter la
+  limite de 60 requêtes par heure).
+developer: Jean-Michel EZES
+website: https://jmezes.fr
+dependencies: []
+repo: https://github.com/jihemezes/github-downloads
+support: https://github.com/jihemezes/github-downloads/issues
+port: 8093
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+releaseNotes: >-
+  Première version : relevé automatique des téléchargements des assets de
+  releases GitHub pour tous les dépôts d'un compte, historique et tableau de
+  bord. Le compte (et un token facultatif) se saisissent dans l'application.
+submitter: Jean-Michel EZES
+submission: https://github.com/jihemezes/github-downloads

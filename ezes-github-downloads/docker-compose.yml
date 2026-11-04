@@ -1,0 +1,16 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: ezes-github-downloads_web_1
+      APP_PORT: 8080
+
+  web:
+    image: ghcr.io/jihemezes/github-downloads:1.0.0
+    restart: on-failure
+    stop_grace_period: 1m
+    environment:
+      GHDL_DATA: /data
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
