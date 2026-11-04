@@ -29,7 +29,22 @@ docker run --rm -p 8080:8080 -v ghdl-data:/data github-downloads
 # http://localhost:8080 puis « Réglages »
 ```
 
-Ou sans Docker : `python3 ghdl.py serve`. Export CSV : `python3 ghdl.py export`.
+Ou sans Docker : `python3 ghdl.py serve`.
+
+## Graphique et exports
+
+- Le graphique affiche les téléchargements **par période** (jour, puis semaine ou mois
+  sur les longues durées) ou le **cumul**, au choix, pour le total ou par dépôt, par
+  version ou par asset (les 6 plus gros, le reste est regroupé dans « Autres »), sur
+  7 jours à tout l'historique. Un clic sur un dépôt restreint le graphique à ce dépôt.
+- Le gain d'un asset entre deux relevés est la différence de ses compteurs. Un asset
+  d'une release publiée entre-temps compte pour tout son total ; un asset ancien qui
+  apparaît (dépôt ou token ajouté, forks activés) est ignoré, pour éviter un faux pic.
+- Boutons **Exporter CSV** (dernier relevé) et **Historique CSV** (tous les relevés) :
+  séparateur point-virgule et BOM UTF-8 pour s'ouvrir directement dans Excel en français.
+- En ligne de commande : `python3 ghdl.py export [--history] [--out fichier.csv]`
+  (séparateur virgule).
+- Réglages du graphique pré-sélectionnables par l'adresse : `?mode=cum&by=repo&days=90`.
 
 ## Token GitHub
 

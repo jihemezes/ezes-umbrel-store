@@ -7,7 +7,7 @@ Le compte, le token et la fréquence se règlent depuis l'interface web.
 
     python ghdl.py serve                # dashboard (http://localhost:8080)
     python ghdl.py collect [OWNER]      # un relevé en ligne de commande
-    python ghdl.py export [--out f.csv] # CSV du dernier relevé
+    python ghdl.py export [--history]   # CSV du dernier relevé (ou de tous)
 
 Variables d'environnement (toutes facultatives) :
     GHDL_DATA     dossier de données (base + config), défaut : dossier du script
@@ -20,6 +20,8 @@ Variables d'environnement (toutes facultatives) :
 """
 import argparse
 import csv
+import datetime
+import io
 import json
 import os
 import re
@@ -31,7 +33,9 @@ import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from itertools import groupby
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 API = os.environ.get("GHDL_API", "https://api.github.com").rstrip("/")
 HERE = Path(__file__).resolve().parent
@@ -323,7 +327,7 @@ def build_payload(owner, fallback=False):
     if not owner and fallback:
         row = conn.execute("SELECT owner FROM snapshots ORDER BY ts DESC LIMIT 1").fetchone()
         owner = row["owner"] if row else None
-    base = {"owner": owner, "last_ts": None, "prev_ts": None, "assets": [], "history": []}
+    base = {"owner": owner, "last_ts": None, "prev_ts": None, "assets": []}
     if not owner:
         conn.close()
         return base
@@ -345,12 +349,152 @@ def build_payload(owner, fallback=False):
         key = (r["repo"], r["tag"], r["asset"])
         d["delta"] = r["downloads"] - prev_map[key] if key in prev_map else None
         assets.append(d)
-    history = [dict(r) for r in conn.execute(
-        """SELECT ts, repo, SUM(downloads) AS downloads FROM snapshots
-           WHERE owner=? GROUP BY ts, repo ORDER BY ts""", (owner,))]
     conn.close()
-    base.update(last_ts=last, prev_ts=prev, assets=assets, history=history)
+    base.update(last_ts=last, prev_ts=prev, assets=assets)
     return base
+
+
+def _epoch(iso):
+    """Date ISO 8601 de GitHub -> timestamp, ou None si absente ou illisible."""
+    try:
+        return datetime.datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+    except (AttributeError, ValueError):
+        return None
+
+
+def group_name(by, repo_filter, repo, tag, asset):
+    if by == "repo":
+        return repo
+    if by == "tag":
+        return tag if repo_filter else f"{repo} · {tag}"
+    if by == "asset":
+        return asset if repo_filter else f"{repo} · {asset}"
+    return "Total"
+
+
+def series_payload(owner, by="total", repo=None, days=30, top=6):
+    """Courbes d'évolution regroupées par total / dépôt / version / asset.
+
+    Chaque série donne le cumul (`values`) et le gain depuis le relevé précédent
+    (`deltas`). Le gain d'un asset est la différence de ses compteurs ; un asset
+    d'une release publiée entre deux relevés compte pour tout son total ; un asset ancien
+    qui apparaît (dépôt ou token ajouté, forks activés) ne compte pas, ce n'est pas un
+    téléchargement nouveau ; un compteur qui baisse est considéré comme remis à zéro. Au-delà de 7 groupes, les
+    plus petits sont réunis dans « Autres ».
+    """
+    empty = {"by": by, "repo": repo, "ts": [], "series": []}
+    if not owner:
+        return empty
+    conn = db_connect()
+    try:
+        where, params = "owner=?", [owner]
+        if repo:
+            where += " AND repo=?"
+            params.append(repo)
+        query = f"SELECT ts, repo, tag, asset, downloads, published_at FROM snapshots WHERE {where}"
+        qp = list(params)
+        if days and days > 0:
+            cutoff = int(time.time()) - days * 86400
+            # le relevé juste avant la fenêtre sert de base au premier gain affiché
+            base_ts = conn.execute(f"SELECT MAX(ts) AS m FROM snapshots WHERE {where} AND ts<=?",
+                                   params + [cutoff]).fetchone()["m"]
+            if base_ts is not None:
+                query += " AND ts>=?"
+                qp.append(base_ts)
+        rows = conn.execute(query + " ORDER BY ts", qp).fetchall()
+    finally:
+        conn.close()
+
+    ts_list, groups, prev, prev_ts, pubs = [], {}, None, None, {}
+    for ts, chunk in groupby(rows, key=lambda r: r["ts"]):
+        cur = {}
+        for r in chunk:
+            key = (r["repo"], r["tag"], r["asset"])
+            cur[key] = r["downloads"]
+            if key not in pubs:
+                pubs[key] = _epoch(r["published_at"])
+        idx = len(ts_list)
+        ts_list.append(ts)
+        vals, dels = {}, {}
+        for key, d in cur.items():
+            name = group_name(by, repo, *key)
+            vals[name] = vals.get(name, 0) + d
+            if prev is None:
+                gain = 0
+            else:
+                before = prev.get(key)
+                if before is None:
+                    # asset nouveau : téléchargements réels seulement si sa release est récente
+                    pub = pubs.get(key)
+                    gain = d if pub is not None and pub > prev_ts else 0
+                else:
+                    gain = d if d < before else d - before
+            dels[name] = dels.get(name, 0) + gain
+        for name, g in groups.items():
+            g["values"].append(vals.get(name))
+            g["deltas"].append(dels.get(name, 0))
+        for name in vals.keys() - groups.keys():
+            groups[name] = {"values": [None] * idx + [vals[name]], "deltas": [0] * idx + [dels[name]]}
+        prev, prev_ts = cur, ts
+
+    def last_value(g):
+        return next((v for v in reversed(g["values"]) if v is not None), 0)
+
+    ranked = sorted(groups.items(), key=lambda kv: -last_value(kv[1]))
+    limit = top if len(ranked) > top + 1 else len(ranked)
+    series = [{"name": n, "values": g["values"], "deltas": g["deltas"]} for n, g in ranked[:limit]]
+    rest = ranked[limit:]
+    if rest:
+        n = len(ts_list)
+        values = [None if all(g["values"][i] is None for _, g in rest)
+                  else sum(g["values"][i] or 0 for _, g in rest) for i in range(n)]
+        deltas = [sum(g["deltas"][i] for _, g in rest) for i in range(n)]
+        series.append({"name": "Autres", "values": values, "deltas": deltas})
+    return {"by": by, "repo": repo, "ts": ts_list, "series": series}
+
+
+def csv_safe(value):
+    """Neutralise l'injection de formules (=, +, -, @) à l'ouverture dans un tableur."""
+    text = "" if value is None else str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@") else text
+
+
+def csv_latest(owner, repo=None, delimiter=","):
+    """CSV du dernier relevé : un asset par ligne."""
+    payload = build_payload(owner)
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=delimiter, lineterminator="\n")
+    w.writerow(["repo", "tag", "asset", "downloads", "size", "published_at"])
+    rows = 0
+    for a in sorted(payload["assets"], key=lambda x: -x["downloads"]):
+        if repo and a["repo"] != repo:
+            continue
+        w.writerow([csv_safe(a["repo"]), csv_safe(a["tag"]), csv_safe(a["asset"]),
+                    a["downloads"], a["size"], a["published_at"] or ""])
+        rows += 1
+    return buf.getvalue(), rows
+
+
+def csv_history(owner, repo=None, delimiter=","):
+    """CSV de tous les relevés : un asset par relevé et par ligne."""
+    conn = db_connect()
+    try:
+        query, params = "SELECT ts, repo, tag, asset, downloads FROM snapshots WHERE owner=?", [owner]
+        if repo:
+            query += " AND repo=?"
+            params.append(repo)
+        buf = io.StringIO()
+        w = csv.writer(buf, delimiter=delimiter, lineterminator="\n")
+        w.writerow(["date_utc", "repo", "tag", "asset", "downloads"])
+        rows = 0
+        for r in conn.execute(query + " ORDER BY ts, repo, tag, asset", params):
+            when = datetime.datetime.fromtimestamp(r["ts"], datetime.timezone.utc)
+            w.writerow([when.strftime("%Y-%m-%dT%H:%M:%SZ"), csv_safe(r["repo"]),
+                        csv_safe(r["tag"]), csv_safe(r["asset"]), r["downloads"]])
+            rows += 1
+        return buf.getvalue(), rows
+    finally:
+        conn.close()
 
 
 def api_payload():
@@ -361,25 +505,27 @@ def api_payload():
     return payload
 
 
-def export_csv(out):
-    payload = build_payload(None, fallback=True)
+def export_csv(out, history=False):
+    owner = public_config()["owner"] or build_payload(None, fallback=True)["owner"]
+    if not owner:
+        sys.exit("Aucune donnée à exporter : lancez d'abord une collecte.")
+    text, rows = csv_history(owner) if history else csv_latest(owner)
     with open(out, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(["repo", "tag", "asset", "downloads", "size", "published_at"])
-        for a in sorted(payload["assets"], key=lambda x: -x["downloads"]):
-            w.writerow([a["repo"], a["tag"], a["asset"], a["downloads"], a["size"], a["published_at"]])
-    print(f"{len(payload['assets'])} lignes écrites dans {out}", file=sys.stderr)
+        f.write(text)
+    print(f"{rows} lignes écrites dans {out}", file=sys.stderr)
 
 
 # --------------------------------------------------------------------------
 # Serveur web
 # --------------------------------------------------------------------------
 class Handler(BaseHTTPRequestHandler):
-    def _send(self, code, body, ctype="application/json"):
+    def _send(self, code, body, ctype="application/json", headers=None):
         if not isinstance(body, bytes):
             body = json.dumps(body).encode()
         self.send_response(code)
         self.send_header("Content-Type", ctype)
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -403,12 +549,42 @@ class Handler(BaseHTTPRequestHandler):
             self._send(400, {"error": "JSON invalide."})
             return None
 
+    def _series(self, query):
+        by = (query.get("by") or ["total"])[0]
+        if by not in ("total", "repo", "tag", "asset"):
+            by = "total"
+        try:
+            days = max(0, min(int((query.get("days") or ["30"])[0]), 3650))
+        except ValueError:
+            days = 30
+        repo = (query.get("repo") or [""])[0][:100] or None
+        return series_payload(public_config()["owner"], by, repo, days)
+
+    def _export(self, query):
+        owner = public_config()["owner"]
+        if not owner:
+            return self._send(400, {"error": "Aucun compte configuré."})
+        repo = (query.get("repo") or [""])[0][:100] or None
+        history = (query.get("history") or [""])[0] in ("1", "true")
+        # point-virgule + BOM : s'ouvre correctement dans Excel en français
+        text, _ = csv_history(owner, repo, ";") if history else csv_latest(owner, repo, ";")
+        safe_owner = re.sub(r"[^A-Za-z0-9._-]", "_", owner)
+        kind = "historique" if history else "releases"
+        name = f"github-downloads-{safe_owner}-{kind}-{datetime.date.today().isoformat()}.csv"
+        self._send(200, text.encode("utf-8-sig"), "text/csv; charset=utf-8",
+                   {"Content-Disposition": f'attachment; filename="{name}"'})
+
     def do_GET(self):
-        path = self.path.split("?")[0]
+        url = urlparse(self.path)
+        path, query = url.path, parse_qs(url.query)
         if path in ("/", "/index.html"):
             self._send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
         elif path == "/api/data":
             self._send(200, api_payload())
+        elif path == "/api/series":
+            self._send(200, self._series(query))
+        elif path == "/api/export.csv":
+            self._export(query)
         elif path == "/healthz":
             self._send(200, {"ok": True})
         else:
@@ -457,6 +633,8 @@ def main():
 
     e = sub.add_parser("export", help="exporte le dernier relevé en CSV")
     e.add_argument("--out", default="downloads.csv")
+    e.add_argument("--history", action="store_true",
+                   help="exporte tous les relevés et pas seulement le dernier")
 
     args = p.parse_args()
     if args.cmd == "collect":
@@ -473,7 +651,7 @@ def main():
     elif args.cmd == "serve":
         serve(args.host, args.port)
     elif args.cmd == "export":
-        export_csv(args.out)
+        export_csv(args.out, args.history)
 
 
 if __name__ == "__main__":

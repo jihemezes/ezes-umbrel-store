@@ -74,6 +74,18 @@
   .help a { color: var(--accent); }
   .form-err { color: var(--err); font-size: 13px; margin-top: 10px; min-height: 18px; }
   .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+  .chart-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .chart-head h2 { margin: 0; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; border-radius: 0; padding: 5px 10px; font-size: 13px; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .chart-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .chart-controls select { font-size: 13px; padding: 5px 8px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; margin: 6px 0 2px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  a.btn { display: inline-block; text-decoration: none; color: var(--text); border: 1px solid var(--line);
+          border-radius: 6px; padding: 7px 12px; font-size: 13px; white-space: nowrap; }
+  a.btn:hover { border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -103,7 +115,33 @@
 
     <section class="grid">
       <div class="card"><h2>Par dépôt (clic pour filtrer)</h2><div id="bars"></div></div>
-      <div class="card"><h2>Évolution du total cumulé</h2><svg id="chart" viewBox="0 0 500 190" preserveAspectRatio="none"></svg><div id="chart-note" style="color:var(--muted);font-size:12px"></div></div>
+      <div class="card">
+        <div class="chart-head">
+          <h2>Évolution</h2>
+          <div class="seg" id="mode-seg">
+            <button type="button" data-m="delta">Par période</button>
+            <button type="button" data-m="cum">Cumul</button>
+          </div>
+        </div>
+        <div class="chart-controls">
+          <select id="by" aria-label="Courbes par">
+            <option value="total">Total</option>
+            <option value="repo">Par dépôt</option>
+            <option value="tag">Par version</option>
+            <option value="asset">Par asset</option>
+          </select>
+          <select id="days" aria-label="Période affichée">
+            <option value="7">7 jours</option>
+            <option value="30">30 jours</option>
+            <option value="90">90 jours</option>
+            <option value="365">1 an</option>
+            <option value="0">Tout</option>
+          </select>
+        </div>
+        <svg id="chart"></svg>
+        <div id="legend" class="legend"></div>
+        <div id="chart-note" style="color:var(--muted);font-size:12px"></div>
+      </div>
     </section>
 
     <section class="card">
@@ -115,6 +153,8 @@
           <option value="all">Toutes les versions</option>
           <option value="latest">Dernière version seulement</option>
         </select>
+        <a class="btn" id="exp-latest" href="api/export.csv" download title="Un asset par ligne, dernier relevé">Exporter CSV</a>
+        <a class="btn" id="exp-history" href="api/export.csv?history=1" download title="Tous les relevés, un asset par relevé et par ligne">Historique CSV</a>
       </div>
       <div class="scroll">
         <table>
@@ -170,6 +210,14 @@ const fmt = n => new Intl.NumberFormat("fr-FR").format(n);
 const fmtDate = s => s ? new Date(s).toLocaleDateString("fr-FR") : "";
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let DATA = null, sortKey = "downloads", sortDir = -1, repoFilter = "", pollTimer = null, askedSetup = false;
+const qs0 = new URLSearchParams(location.search);
+const pref = (k, d) => qs0.get(k) || (() => { try { return localStorage.getItem("ghdl." + k) || d; } catch (e) { return d; } })();
+const setPref = (k, v) => { try { localStorage.setItem("ghdl." + k, v); } catch (e) {} };
+let chartMode = pref("mode", "delta"), chartBy = pref("by", "total"), chartDays = String(pref("days", "30"));
+if (!["delta", "cum"].includes(chartMode)) chartMode = "delta";
+if (!["total", "repo", "tag", "asset"].includes(chartBy)) chartBy = "total";
+if (!["7", "30", "90", "365", "0"].includes(chartDays)) chartDays = "30";
+let lastSeries = null, seriesSeq = 0, resizeTimer = null;
 
 async function load() {
   try {
@@ -231,7 +279,7 @@ function render() {
   if (repoFilter && !(repoFilter in byRepo)) repoFilter = "";
   renderBars(byRepo);
   renderRepoSelect(byRepo);
-  renderChart();
+  loadSeries();
   renderTable();
 }
 
@@ -247,7 +295,7 @@ function renderBars(byRepo) {
   document.querySelectorAll(".bar").forEach(el => el.onclick = () => {
     repoFilter = repoFilter === el.dataset.repo ? "" : el.dataset.repo;
     $("repoSel").value = repoFilter;
-    renderBars(byRepo); renderChart(); renderTable();
+    renderBars(byRepo); loadSeries(); renderTable();
   });
 }
 
@@ -258,34 +306,142 @@ function renderRepoSelect(byRepo) {
   sel.value = cur;
 }
 
-function renderChart() {
-  const svg = $("chart"), W = 500, H = 190, P = {l: 44, r: 10, t: 10, b: 22};
-  const perTs = {};
-  DATA.history.filter(h => !repoFilter || h.repo === repoFilter)
-    .forEach(h => perTs[h.ts] = (perTs[h.ts] || 0) + h.downloads);
-  const pts = Object.entries(perTs).map(([t, v]) => [+t, v]).sort((a, b) => a[0] - b[0]);
-  $("chart-note").textContent = pts.length < 2
-    ? "Un seul relevé pour l'instant : l'historique se construit à chaque collecte."
-    : (repoFilter ? "Dépôt : " + repoFilter : "Tous les dépôts");
-  if (!pts.length) { svg.innerHTML = ""; return; }
-  const t0 = pts[0][0], t1 = pts[pts.length - 1][0] || t0 + 1;
-  const vmax = Math.max(...pts.map(p => p[1]), 1);
-  const x = t => P.l + (pts.length < 2 ? (W - P.l - P.r) / 2 : (t - t0) / ((t1 - t0) || 1) * (W - P.l - P.r));
-  const y = v => H - P.b - v / vmax * (H - P.t - P.b);
-  const css = getComputedStyle(document.documentElement);
-  const line = css.getPropertyValue("--accent").trim(), mut = css.getPropertyValue("--muted").trim(),
-        grid = css.getPropertyValue("--line").trim();
-  let g = "";
-  for (let i = 0; i <= 4; i++) {
-    const v = vmax * i / 4, yy = y(v);
-    g += `<line x1="${P.l}" x2="${W - P.r}" y1="${yy}" y2="${yy}" stroke="${grid}"/>` +
-         `<text x="${P.l - 6}" y="${yy + 4}" text-anchor="end" font-size="10" fill="${mut}">${fmt(Math.round(v))}</text>`;
+const PALETTE = ["#2f6feb", "#e8590c", "#2f9e44", "#ae3ec9", "#f0a500", "#0b7285", "#c2255c"];
+const OTHER_COLOR = "#868e96";
+const pad2 = n => String(n).padStart(2, "0");
+
+function niceTicks(max) {
+  const raw = Math.max(max, 1) / 4, mag = Math.pow(10, Math.floor(Math.log10(raw))), norm = raw / mag;
+  const step = Math.max(1, (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag);
+  const ticks = [];
+  for (let v = 0; ; v += step) { ticks.push(v); if (v >= max) break; }
+  return ticks;
+}
+function bucketStart(ts, unit) {
+  const d = new Date(ts * 1000);
+  if (unit === "month") return new Date(d.getFullYear(), d.getMonth(), 1);
+  if (unit === "week") return new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+const bucketNext = (d, unit) => unit === "month" ? new Date(d.getFullYear(), d.getMonth() + 1, 1)
+  : new Date(d.getFullYear(), d.getMonth(), d.getDate() + (unit === "week" ? 7 : 1));
+const bucketKey = (d, unit) => d.getFullYear() + "-" + pad2(d.getMonth() + 1) + (unit === "month" ? "" : "-" + pad2(d.getDate()));
+const bucketLabel = (d, unit) => unit === "month"
+  ? d.toLocaleDateString("fr-FR", {month: "short", year: "2-digit"})
+  : d.toLocaleDateString("fr-FR", {day: "2-digit", month: "2-digit"});
+
+function updateExportLinks() {
+  const r = repoFilter ? "repo=" + encodeURIComponent(repoFilter) : "";
+  $("exp-latest").href = "api/export.csv" + (r ? "?" + r : "");
+  $("exp-history").href = "api/export.csv?history=1" + (r ? "&" + r : "");
+}
+
+async function loadSeries() {
+  updateExportLinks();
+  const seq = ++seriesSeq;
+  const qs = new URLSearchParams({by: chartBy, days: chartDays});
+  if (repoFilter) qs.set("repo", repoFilter);
+  try {
+    const r = await fetch("api/series?" + qs);
+    const data = await r.json();
+    if (seq !== seriesSeq) return;      // une réponse plus récente est déjà arrivée
+    lastSeries = data;
+    drawChart();
+  } catch (e) { /* le graphique garde sa dernière version */ }
+}
+
+function drawChart() {
+  const svg = $("chart"), s = lastSeries, note = $("chart-note"), legend = $("legend");
+  const W = Math.max(280, Math.round(svg.getBoundingClientRect().width) || 500), H = 190;
+  const P = {l: 46, r: 10, t: 10, b: 22};
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  legend.innerHTML = "";
+  if (!s || s.ts.length < 2) {
+    svg.innerHTML = "";
+    note.textContent = "Au moins deux relevés sont nécessaires : l'historique se construit à chaque collecte.";
+    return;
   }
-  const d = pts.map((p, i) => (i ? "L" : "M") + x(p[0]).toFixed(1) + " " + y(p[1]).toFixed(1)).join(" ");
-  const dots = pts.map(p => `<circle cx="${x(p[0])}" cy="${y(p[1])}" r="3" fill="${line}"><title>${new Date(p[0] * 1000).toLocaleString("fr-FR")} : ${fmt(p[1])}</title></circle>`).join("");
-  const lab = (t, anchor) => `<text x="${x(t)}" y="${H - 6}" text-anchor="${anchor}" font-size="10" fill="${mut}">${new Date(t * 1000).toLocaleDateString("fr-FR")}</text>`;
-  svg.innerHTML = g + `<path d="${d}" fill="none" stroke="${line}" stroke-width="2"/>` + dots +
-    (pts.length > 1 ? lab(t0, "start") + lab(t1, "end") : lab(t0, "middle"));
+  const css = getComputedStyle(document.documentElement);
+  const mut = css.getPropertyValue("--muted").trim(), grid = css.getPropertyValue("--line").trim(),
+        accent = css.getPropertyValue("--accent").trim();
+  const multi = s.series.length > 1;
+  const color = (se, i) => !multi ? accent : se.name === "Autres" ? OTHER_COLOR : PALETTE[i % PALETTE.length];
+  if (multi) legend.innerHTML = s.series.map((se, i) =>
+    `<span><i style="background:${color(se, i)}"></i>${esc(se.name)}</span>`).join("");
+  const innerW = W - P.l - P.r, innerH = H - P.t - P.b;
+  const gridLine = (v, yy) => `<line x1="${P.l}" x2="${W - P.r}" y1="${yy}" y2="${yy}" stroke="${grid}"/>` +
+    `<text x="${P.l - 6}" y="${yy + 4}" text-anchor="end" font-size="10" fill="${mut}">${fmt(Math.round(v))}</text>`;
+  const xLabel = (x, anchor, text) =>
+    `<text x="${x}" y="${H - 6}" text-anchor="${anchor}" font-size="10" fill="${mut}">${text}</text>`;
+  let out = "";
+
+  if (chartMode === "delta") {
+    // gains entre relevés, regroupés par jour (puis semaine ou mois si la période est longue)
+    const span = (s.ts[s.ts.length - 1] - s.ts[0]) / 86400;
+    const unit = span <= 90 ? "day" : span <= 400 ? "week" : "month";
+    const unitFr = {day: "par jour", week: "par semaine", month: "par mois"}[unit];
+    const cols = new Map();
+    s.ts.forEach((t, i) => {
+      if (i === 0) return;              // le premier relevé sert de base de comparaison
+      const d = bucketStart(t, unit), key = bucketKey(d, unit);
+      if (!cols.has(key)) cols.set(key, {date: d, vals: s.series.map(() => 0)});
+      s.series.forEach((se, k) => cols.get(key).vals[k] += se.deltas[i] || 0);
+    });
+    const first = bucketStart(s.ts[1], unit), last = bucketStart(s.ts[s.ts.length - 1], unit);
+    const list = [];
+    for (let d = first; d <= last; d = bucketNext(d, unit)) {
+      list.push(cols.get(bucketKey(d, unit)) || {date: d, vals: s.series.map(() => 0)});
+    }
+    const totals = list.map(c => c.vals.reduce((a, b) => a + b, 0));
+    const ticks = niceTicks(Math.max(...totals, 1)), top = ticks[ticks.length - 1];
+    const y = v => H - P.b - v / top * innerH;
+    ticks.forEach(v => out += gridLine(v, y(v)));
+    const bw = innerW / list.length, gap = bw > 6 ? 2 : 0;
+    list.forEach((c, i) => {
+      let base = 0;
+      c.vals.forEach((v, k) => {
+        if (!v) return;
+        const h = v / top * innerH;
+        out += `<rect x="${(P.l + i * bw + gap / 2).toFixed(1)}" y="${(y(base) - h).toFixed(1)}" ` +
+          `width="${Math.max(1, bw - gap).toFixed(1)}" height="${h.toFixed(1)}" fill="${color(s.series[k], k)}">` +
+          `<title>${bucketLabel(c.date, unit)} · ${esc(s.series[k].name)} : +${fmt(v)}</title></rect>`;
+        base += v;
+      });
+    });
+    out += xLabel(P.l, "start", bucketLabel(list[0].date, unit)) +
+           xLabel(W - P.r, "end", bucketLabel(list[list.length - 1].date, unit));
+    note.textContent = "Téléchargements " + unitFr + (repoFilter ? " · dépôt " + repoFilter : "");
+  } else {
+    // cumul des compteurs à chaque relevé, axe vertical ajusté aux valeurs
+    const all = s.series.flatMap(se => se.values.filter(v => v !== null));
+    let lo = Math.min(...all), hi = Math.max(...all);
+    if (hi === lo) { hi += 1; lo = Math.max(0, lo - 1); }
+    const padv = (hi - lo) * 0.1;
+    lo = Math.max(0, lo - padv); hi += padv;
+    const t0 = s.ts[0], t1 = s.ts[s.ts.length - 1];
+    const x = t => P.l + (t - t0) / ((t1 - t0) || 1) * innerW;
+    const y = v => H - P.b - (v - lo) / (hi - lo) * innerH;
+    for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4; out += gridLine(v, y(v)); }
+    s.series.forEach((se, k) => {
+      let d = "", pen = false;
+      se.values.forEach((v, i) => {
+        if (v === null) { pen = false; return; }
+        d += (pen ? "L" : "M") + x(s.ts[i]).toFixed(1) + " " + y(v).toFixed(1) + " ";
+        pen = true;
+      });
+      out += `<path d="${d}" fill="none" stroke="${color(se, k)}" stroke-width="2"/>`;
+      if (s.ts.length <= 40) se.values.forEach((v, i) => {
+        if (v === null) return;
+        out += `<circle cx="${x(s.ts[i]).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.5" fill="${color(se, k)}">` +
+          `<title>${new Date(s.ts[i] * 1000).toLocaleString("fr-FR")} · ${esc(se.name)} : ${fmt(v)}</title></circle>`;
+      });
+    });
+    const dl = t => new Date(t * 1000).toLocaleDateString("fr-FR", {day: "2-digit", month: "2-digit"});
+    out += xLabel(P.l, "start", dl(t0)) + xLabel(W - P.r, "end", dl(t1));
+    note.textContent = "Cumul des téléchargements" + (lo > 0 ? " · axe vertical ajusté aux valeurs" : "") +
+      (repoFilter ? " · dépôt " + repoFilter : "");
+  }
+  svg.innerHTML = out;
 }
 
 function renderTable() {
@@ -323,7 +479,7 @@ document.querySelectorAll("th[data-k]").forEach(th => th.onclick = () => {
 });
 $("q").oninput = renderTable;
 $("mode").onchange = renderTable;
-$("repoSel").onchange = e => { repoFilter = e.target.value; renderBars(byRepoNow()); renderChart(); renderTable(); };
+$("repoSel").onchange = e => { repoFilter = e.target.value; renderBars(byRepoNow()); loadSeries(); renderTable(); };
 
 $("refresh").onclick = async () => {
   $("refresh").disabled = true;
@@ -373,6 +529,21 @@ $("cfgForm").onsubmit = async e => {
   } finally { $("f-save").disabled = false; }
 };
 
+function syncChartControls() {
+  document.querySelectorAll("#mode-seg button").forEach(b => b.classList.toggle("on", b.dataset.m === chartMode));
+  $("by").value = chartBy;
+  $("days").value = chartDays;
+}
+document.querySelectorAll("#mode-seg button").forEach(b => b.onclick = () => {
+  chartMode = b.dataset.m; setPref("mode", chartMode); syncChartControls(); drawChart();
+});
+$("by").onchange = e => { chartBy = e.target.value; setPref("by", chartBy); loadSeries(); };
+$("days").onchange = e => { chartDays = e.target.value; setPref("days", chartDays); loadSeries(); };
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (lastSeries) drawChart(); }, 150);
+});
+syncChartControls();
 load();
 </script>
 </body>

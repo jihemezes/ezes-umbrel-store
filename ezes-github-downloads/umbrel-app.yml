@@ -2,7 +2,7 @@ manifestVersion: 1
 id: ezes-github-downloads
 category: developer
 name: GitHub Downloads
-version: "1.0.0"
+version: "1.1.0"
 tagline: Combien de fois vos releases GitHub ont-elles été téléchargées ?
 icon: https://raw.githubusercontent.com/jihemezes/ezes-umbrel-store/main/ezes-github-downloads/icon.svg
 description: >-
@@ -27,8 +27,11 @@ path: ""
 defaultUsername: ""
 defaultPassword: ""
 releaseNotes: >-
-  Première version : relevé automatique des téléchargements des assets de
-  releases GitHub pour tous les dépôts d'un compte, historique et tableau de
-  bord. Le compte (et un token facultatif) se saisissent dans l'application.
+  Nouveau graphique : téléchargements par jour (ou par semaine/mois sur les
+  longues périodes) ou cumul, avec courbes par dépôt, par version ou par asset
+  et choix de la période (7 jours à tout l'historique).
+
+  Export CSV depuis l'interface : dernier relevé ou historique complet,
+  filtrable par dépôt.
 submitter: Jean-Michel EZES
 submission: https://github.com/jihemezes/ezes-umbrel-store
