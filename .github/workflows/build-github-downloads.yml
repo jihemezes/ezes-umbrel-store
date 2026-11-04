@@ -1,0 +1,58 @@
+name: Build GitHub Downloads image
+
+# Construit l'image de l'app « GitHub Downloads » à partir de .src/github-downloads
+# et la publie sur ghcr.io/<compte>/github-downloads (amd64 + arm64).
+# La version de l'image est lue dans ezes-github-downloads/umbrel-app.yml :
+# pour publier une nouvelle version, changez-la là, ainsi que le tag de l'image
+# dans ezes-github-downloads/docker-compose.yml, puis poussez sur main.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".src/github-downloads/**"
+      - "ezes-github-downloads/umbrel-app.yml"
+      - ".github/workflows/build-github-downloads.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lire la version de l'app
+        id: v
+        run: |
+          VERSION=$(grep -m1 '^version:' ezes-github-downloads/umbrel-app.yml | sed -E 's/^version: *"?([^"]+)"?.*/\1/')
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version : $VERSION"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # amd64 (PC, NAS) + arm64 (Raspberry Pi / Umbrel Home)
+      - uses: docker/build-push-action@v6
+        with:
+          context: .src/github-downloads
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/github-downloads:${{ steps.v.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/github-downloads:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.v.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

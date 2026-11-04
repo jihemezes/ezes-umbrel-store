@@ -1,0 +1,6 @@
+.git
+.github
+*.db
+config.json
+__pycache__
+README.md

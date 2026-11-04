@@ -19,8 +19,8 @@ description: >-
 developer: Jean-Michel EZES
 website: https://jmezes.fr
 dependencies: []
-repo: https://github.com/jihemezes/github-downloads
-support: https://github.com/jihemezes/github-downloads/issues
+repo: https://github.com/jihemezes/ezes-umbrel-store
+support: https://github.com/jihemezes/ezes-umbrel-store/issues
 port: 8093
 gallery: []
 path: ""
@@ -31,4 +31,4 @@ releaseNotes: >-
   releases GitHub pour tous les dépôts d'un compte, historique et tableau de
   bord. Le compte (et un token facultatif) se saisissent dans l'application.
 submitter: Jean-Michel EZES
-submission: https://github.com/jihemezes/github-downloads
+submission: https://github.com/jihemezes/ezes-umbrel-store

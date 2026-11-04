@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GitHub Downloads</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1c2128; --muted: #6a737d;
+    --line: #e1e4e8; --accent: #2f6feb; --accent-soft: #dbe8ff; --up: #1a7f37;
+    --err-bg: #ffebe9; --err: #cf222e; --info-bg: #ddf4ff; --info: #0969da;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117; --card: #161b22; --text: #e6edf3; --muted: #8b949e;
+      --line: #30363d; --accent: #58a6ff; --accent-soft: #1d3557; --up: #3fb950;
+      --err-bg: #3d1418; --err: #ff7b72; --info-bg: #10283f; --info: #79c0ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+           justify-content: space-between; margin-bottom: 18px; }
+  h1 { font-size: 20px; margin: 0; }
+  h1 small { color: var(--muted); font-weight: 400; font-size: 13px; display: block; margin-top: 2px; }
+  .actions { display: flex; gap: 8px; }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+           padding: 8px 14px; font: inherit; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  button:disabled { opacity: .6; cursor: wait; }
+  .banner { border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 14px; }
+  .banner.err { background: var(--err-bg); color: var(--err); }
+  .banner.info { background: var(--info-bg); color: var(--info); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .kpi .v { font-size: 26px; font-weight: 650; }
+  .kpi .l { color: var(--muted); font-size: 13px; }
+  .kpi .d { color: var(--up); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  h2 { font-size: 14px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+  .bar { display: grid; grid-template-columns: 130px 1fr 60px; gap: 8px; align-items: center;
+         font-size: 13px; margin: 5px 0; cursor: pointer; }
+  .bar.active .name { font-weight: 700; color: var(--accent); }
+  .bar .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar .track { background: var(--accent-soft); border-radius: 4px; height: 12px; }
+  .bar .fill { background: var(--accent); height: 100%; border-radius: 4px; }
+  .bar .n { text-align: right; font-variant-numeric: tabular-nums; }
+  svg { width: 100%; height: 190px; display: block; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  input[type=search], input[type=text], input[type=password], select {
+    background: var(--card); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 10px; font: inherit; }
+  input[type=search] { flex: 1; min-width: 180px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.asset { word-break: break-all; }
+  .up { color: var(--up); }
+  .empty { color: var(--muted); padding: 30px; text-align: center; }
+  .scroll { overflow-x: auto; }
+  dialog { background: var(--card); color: var(--text); border: 1px solid var(--line);
+           border-radius: 12px; padding: 20px; width: min(460px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h3 { margin: 0 0 4px; font-size: 17px; }
+  dialog p.hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
+  label.check { font-weight: 400; display: flex; gap: 8px; align-items: center; margin: 10px 0 0; }
+  dialog input[type=text], dialog input[type=password], dialog select { width: 100%; }
+  .help { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .help a { color: var(--accent); }
+  .form-err { color: var(--err); font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="title">GitHub Downloads<small id="sub"></small></h1>
+    <div class="actions">
+      <button id="settings" class="secondary">Réglages</button>
+      <button id="refresh" title="Relance une collecte auprès de GitHub">Actualiser</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <div id="setup" class="card empty" hidden>
+    Pour commencer, indiquez le compte GitHub à analyser dans les <b>Réglages</b>.
+  </div>
+  <div id="none" class="card empty" hidden></div>
+
+  <div id="content" hidden>
+    <section class="kpis">
+      <div class="card kpi"><div class="v" id="k-total">0</div><div class="l">téléchargements au total</div><div class="d" id="k-delta"></div></div>
+      <div class="card kpi"><div class="v" id="k-repos">0</div><div class="l">dépôts avec assets</div></div>
+      <div class="card kpi"><div class="v" id="k-assets">0</div><div class="l">assets</div></div>
+      <div class="card kpi"><div class="v" id="k-top">–</div><div class="l">asset le plus téléchargé</div></div>
+    </section>
+
+    <section class="grid">
+      <div class="card"><h2>Par dépôt (clic pour filtrer)</h2><div id="bars"></div></div>
+      <div class="card"><h2>Évolution du total cumulé</h2><svg id="chart" viewBox="0 0 500 190" preserveAspectRatio="none"></svg><div id="chart-note" style="color:var(--muted);font-size:12px"></div></div>
+    </section>
+
+    <section class="card">
+      <h2>Assets</h2>
+      <div class="controls">
+        <input type="search" id="q" placeholder="Filtrer par nom, tag, dépôt…">
+        <select id="repoSel"><option value="">Tous les dépôts</option></select>
+        <select id="mode">
+          <option value="all">Toutes les versions</option>
+          <option value="latest">Dernière version seulement</option>
+        </select>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr>
+            <th data-k="repo">Dépôt</th><th data-k="tag">Version</th><th data-k="asset">Asset</th>
+            <th data-k="downloads" class="num">Téléchargements</th>
+            <th data-k="delta" class="num">Depuis le dernier relevé</th>
+            <th data-k="published_at">Publiée le</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>
+
+<dialog id="dlg">
+  <form id="cfgForm" method="dialog">
+    <h3>Réglages</h3>
+    <p class="hint">Compte à analyser et paramètres de collecte.</p>
+
+    <label for="f-owner">Compte ou organisation GitHub</label>
+    <input type="text" id="f-owner" autocomplete="off" spellcheck="false" placeholder="ex. octocat" required>
+
+    <label for="f-token">Token GitHub <span style="font-weight:400;color:var(--muted)">(facultatif)</span></label>
+    <input type="password" id="f-token" autocomplete="off" spellcheck="false">
+    <div class="help" id="f-token-help"></div>
+    <label class="check" id="f-clear-row" hidden><input type="checkbox" id="f-clear"> Supprimer le token enregistré</label>
+
+    <label for="f-refresh">Collecte automatique</label>
+    <select id="f-refresh">
+      <option value="1">Toutes les heures</option>
+      <option value="3">Toutes les 3 heures</option>
+      <option value="6">Toutes les 6 heures</option>
+      <option value="12">Toutes les 12 heures</option>
+      <option value="24">Une fois par jour</option>
+      <option value="0">Désactivée (bouton Actualiser seulement)</option>
+    </select>
+
+    <label class="check"><input type="checkbox" id="f-forks"> Inclure les forks</label>
+
+    <div class="form-err" id="f-err"></div>
+    <div class="form-actions">
+      <button type="button" class="secondary" id="f-cancel">Annuler</button>
+      <button type="submit" id="f-save">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => new Intl.NumberFormat("fr-FR").format(n);
+const fmtDate = s => s ? new Date(s).toLocaleDateString("fr-FR") : "";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let DATA = null, sortKey = "downloads", sortDir = -1, repoFilter = "", pollTimer = null, askedSetup = false;
+
+async function load() {
+  try {
+    const r = await fetch("api/data");
+    DATA = await r.json();
+  } catch (e) {
+    showBanner("err", "Impossible de joindre l'application.");
+    return;
+  }
+  render();
+  clearTimeout(pollTimer);
+  if (DATA.status.collecting) pollTimer = setTimeout(load, 2500);
+}
+
+function showBanner(kind, text) {
+  const b = $("banner");
+  b.hidden = !text; b.className = "banner " + kind; b.textContent = text || "";
+}
+
+function render() {
+  const cfg = DATA.config, st = DATA.status, hasData = DATA.assets.length > 0;
+
+  if (st.collecting) showBanner("info", "Collecte en cours auprès de GitHub…");
+  else if (st.error) showBanner("err", st.error);
+  else showBanner("", "");
+
+  $("setup").hidden = !!cfg.owner;
+  $("none").hidden = !(cfg.owner && !hasData && !st.collecting && !st.error);
+  $("none").textContent = "Aucun asset de release trouvé pour « " + cfg.owner + " ».";
+  $("content").hidden = !hasData;
+  $("refresh").disabled = !cfg.owner || st.collecting;
+
+  let sub = cfg.owner || "";
+  if (DATA.last_ts) {
+    sub += " · relevé du " + new Date(DATA.last_ts * 1000).toLocaleString("fr-FR");
+    sub += cfg.refresh_hours > 0 ? " · collecte auto toutes les " + cfg.refresh_hours + " h" : " · collecte auto désactivée";
+  }
+  $("sub").textContent = sub;
+
+  if (!cfg.owner && !askedSetup) { askedSetup = true; openSettings(); }
+  if (!hasData) return;
+
+  const a = DATA.assets;
+  const total = a.reduce((s, x) => s + x.downloads, 0);
+  const byRepo = {};
+  a.forEach(x => byRepo[x.repo] = (byRepo[x.repo] || 0) + x.downloads);
+  const top = [...a].sort((x, y) => y.downloads - x.downloads)[0];
+
+  $("k-total").textContent = fmt(total);
+  $("k-repos").textContent = Object.keys(byRepo).length;
+  $("k-assets").textContent = a.length;
+  $("k-top").textContent = top ? top.asset : "–";
+  $("k-top").title = top ? `${top.repo} ${top.tag} : ${fmt(top.downloads)}` : "";
+  $("k-top").style.fontSize = top && top.asset.length > 18 ? "15px" : "";
+  const hasDelta = a.some(x => x.delta !== null);
+  const dsum = a.reduce((s, x) => s + (x.delta || 0), 0);
+  $("k-delta").textContent = hasDelta ? "+" + fmt(dsum) + " depuis le relevé précédent" : "";
+
+  if (repoFilter && !(repoFilter in byRepo)) repoFilter = "";
+  renderBars(byRepo);
+  renderRepoSelect(byRepo);
+  renderChart();
+  renderTable();
+}
+
+function renderBars(byRepo) {
+  const entries = Object.entries(byRepo).sort((a, b) => b[1] - a[1]);
+  const max = entries[0] ? entries[0][1] || 1 : 1;
+  $("bars").innerHTML = entries.map(([name, n]) => `
+    <div class="bar ${name === repoFilter ? "active" : ""}" data-repo="${esc(name)}">
+      <span class="name" title="${esc(name)}">${esc(name)}</span>
+      <span class="track"><span class="fill" style="display:block;width:${(n / max * 100).toFixed(1)}%"></span></span>
+      <span class="n">${fmt(n)}</span>
+    </div>`).join("");
+  document.querySelectorAll(".bar").forEach(el => el.onclick = () => {
+    repoFilter = repoFilter === el.dataset.repo ? "" : el.dataset.repo;
+    $("repoSel").value = repoFilter;
+    renderBars(byRepo); renderChart(); renderTable();
+  });
+}
+
+function renderRepoSelect(byRepo) {
+  const sel = $("repoSel"), cur = repoFilter;
+  sel.innerHTML = '<option value="">Tous les dépôts</option>' +
+    Object.keys(byRepo).sort().map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
+  sel.value = cur;
+}
+
+function renderChart() {
+  const svg = $("chart"), W = 500, H = 190, P = {l: 44, r: 10, t: 10, b: 22};
+  const perTs = {};
+  DATA.history.filter(h => !repoFilter || h.repo === repoFilter)
+    .forEach(h => perTs[h.ts] = (perTs[h.ts] || 0) + h.downloads);
+  const pts = Object.entries(perTs).map(([t, v]) => [+t, v]).sort((a, b) => a[0] - b[0]);
+  $("chart-note").textContent = pts.length < 2
+    ? "Un seul relevé pour l'instant : l'historique se construit à chaque collecte."
+    : (repoFilter ? "Dépôt : " + repoFilter : "Tous les dépôts");
+  if (!pts.length) { svg.innerHTML = ""; return; }
+  const t0 = pts[0][0], t1 = pts[pts.length - 1][0] || t0 + 1;
+  const vmax = Math.max(...pts.map(p => p[1]), 1);
+  const x = t => P.l + (pts.length < 2 ? (W - P.l - P.r) / 2 : (t - t0) / ((t1 - t0) || 1) * (W - P.l - P.r));
+  const y = v => H - P.b - v / vmax * (H - P.t - P.b);
+  const css = getComputedStyle(document.documentElement);
+  const line = css.getPropertyValue("--accent").trim(), mut = css.getPropertyValue("--muted").trim(),
+        grid = css.getPropertyValue("--line").trim();
+  let g = "";
+  for (let i = 0; i <= 4; i++) {
+    const v = vmax * i / 4, yy = y(v);
+    g += `<line x1="${P.l}" x2="${W - P.r}" y1="${yy}" y2="${yy}" stroke="${grid}"/>` +
+         `<text x="${P.l - 6}" y="${yy + 4}" text-anchor="end" font-size="10" fill="${mut}">${fmt(Math.round(v))}</text>`;
+  }
+  const d = pts.map((p, i) => (i ? "L" : "M") + x(p[0]).toFixed(1) + " " + y(p[1]).toFixed(1)).join(" ");
+  const dots = pts.map(p => `<circle cx="${x(p[0])}" cy="${y(p[1])}" r="3" fill="${line}"><title>${new Date(p[0] * 1000).toLocaleString("fr-FR")} : ${fmt(p[1])}</title></circle>`).join("");
+  const lab = (t, anchor) => `<text x="${x(t)}" y="${H - 6}" text-anchor="${anchor}" font-size="10" fill="${mut}">${new Date(t * 1000).toLocaleDateString("fr-FR")}</text>`;
+  svg.innerHTML = g + `<path d="${d}" fill="none" stroke="${line}" stroke-width="2"/>` + dots +
+    (pts.length > 1 ? lab(t0, "start") + lab(t1, "end") : lab(t0, "middle"));
+}
+
+function renderTable() {
+  const q = $("q").value.trim().toLowerCase();
+  let rows = DATA.assets.filter(x =>
+    (!repoFilter || x.repo === repoFilter) &&
+    (!q || (x.repo + " " + x.tag + " " + x.asset).toLowerCase().includes(q)));
+  if ($("mode").value === "latest") {
+    const latest = {};
+    DATA.assets.forEach(x => {
+      const p = x.published_at || "";
+      if (!(x.repo in latest) || p > latest[x.repo]) latest[x.repo] = p;
+    });
+    rows = rows.filter(x => (x.published_at || "") === latest[x.repo]);
+  }
+  rows.sort((a, b) => {
+    const va = a[sortKey] ?? -1, vb = b[sortKey] ?? -1;
+    return (va < vb ? -1 : va > vb ? 1 : 0) * sortDir;
+  });
+  $("rows").innerHTML = rows.map(x => `<tr>
+      <td>${esc(x.repo)}</td><td>${esc(x.tag)}</td><td class="asset">${esc(x.asset)}</td>
+      <td class="num">${fmt(x.downloads)}</td>
+      <td class="num ${x.delta ? "up" : ""}">${x.delta === null ? "–" : (x.delta > 0 ? "+" : "") + fmt(x.delta)}</td>
+      <td>${fmtDate(x.published_at)}</td></tr>`).join("") ||
+    '<tr><td colspan="6" class="empty">Aucun résultat</td></tr>';
+}
+
+function byRepoNow() {
+  const m = {}; DATA.assets.forEach(x => m[x.repo] = (m[x.repo] || 0) + x.downloads); return m;
+}
+document.querySelectorAll("th[data-k]").forEach(th => th.onclick = () => {
+  const k = th.dataset.k;
+  sortDir = sortKey === k ? -sortDir : (k === "downloads" || k === "delta" ? -1 : 1);
+  sortKey = k; renderTable();
+});
+$("q").oninput = renderTable;
+$("mode").onchange = renderTable;
+$("repoSel").onchange = e => { repoFilter = e.target.value; renderBars(byRepoNow()); renderChart(); renderTable(); };
+
+$("refresh").onclick = async () => {
+  $("refresh").disabled = true;
+  await fetch("api/refresh", {method: "POST"});
+  await load();
+};
+
+/* ---- Réglages ---- */
+function openSettings() {
+  const c = DATA.config;
+  $("f-owner").value = c.owner || "";
+  $("f-token").value = "";
+  $("f-clear").checked = false;
+  $("f-clear-row").hidden = c.token_source !== "config";
+  $("f-token-help").innerHTML =
+    (c.token_source === "config" ? "Un token est enregistré (laissez vide pour le conserver). " :
+     c.token_source === "env" ? "Un token est fourni par l'environnement du conteneur. " : "") +
+    'Sans token : 60 requêtes/heure et dépôts publics seulement. Avec un token : 5000/heure' +
+    ' et vos dépôts privés. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Créer un token</a>' +
+    ' (accès en lecture à « Contents » suffit).';
+  const sel = $("f-refresh");
+  sel.value = String(c.refresh_hours);
+  if (sel.value !== String(c.refresh_hours)) sel.value = "6";
+  $("f-forks").checked = !!c.include_forks;
+  $("f-err").textContent = "";
+  $("dlg").showModal();
+}
+$("settings").onclick = openSettings;
+$("f-cancel").onclick = () => $("dlg").close();
+$("cfgForm").onsubmit = async e => {
+  e.preventDefault();
+  const body = {owner: $("f-owner").value.trim(), refresh_hours: +$("f-refresh").value,
+                include_forks: $("f-forks").checked};
+  const tok = $("f-token").value.trim();
+  if (tok) body.token = tok;
+  if ($("f-clear").checked) body.clear_token = true;
+  $("f-save").disabled = true;
+  try {
+    const r = await fetch("api/config", {method: "POST",
+      headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    const j = await r.json();
+    if (!r.ok) { $("f-err").textContent = j.error || "Erreur"; return; }
+    $("dlg").close();
+    await load();
+  } catch (err) {
+    $("f-err").textContent = "Impossible d'enregistrer.";
+  } finally { $("f-save").disabled = false; }
+};
+
+load();
+</script>
+</body>
+</html>
