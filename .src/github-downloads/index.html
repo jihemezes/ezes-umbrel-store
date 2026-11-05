@@ -9,12 +9,14 @@
     --bg: #f6f7f9; --card: #fff; --text: #1c2128; --muted: #6a737d;
     --line: #e1e4e8; --accent: #2f6feb; --accent-soft: #dbe8ff; --up: #1a7f37;
     --err-bg: #ffebe9; --err: #cf222e; --info-bg: #ddf4ff; --info: #0969da;
+    --warn-bg: #fff8c5; --warn: #7d4e00; --down: #cf222e;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #0d1117; --card: #161b22; --text: #e6edf3; --muted: #8b949e;
       --line: #30363d; --accent: #58a6ff; --accent-soft: #1d3557; --up: #3fb950;
       --err-bg: #3d1418; --err: #ff7b72; --info-bg: #10283f; --info: #79c0ff;
+      --warn-bg: #3b2e00; --warn: #e3b341; --down: #ff7b72;
     }
   }
   * { box-sizing: border-box; }
@@ -33,8 +35,9 @@
   .banner { border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 14px; }
   .banner.err { background: var(--err-bg); color: var(--err); }
   .banner.info { background: var(--info-bg); color: var(--info); }
+  .banner.warn { background: var(--warn-bg); color: var(--warn); }
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card { min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
   .kpi .v { font-size: 26px; font-weight: 650; }
   .kpi .l { color: var(--muted); font-size: 13px; }
   .kpi .d { color: var(--up); font-size: 13px; }
@@ -86,6 +89,31 @@
   a.btn { display: inline-block; text-decoration: none; color: var(--text); border: 1px solid var(--line);
           border-radius: 6px; padding: 7px 12px; font-size: 13px; white-space: nowrap; }
   a.btn:hover { border-color: var(--accent); }
+  .tabbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .tabbar .seg button { padding: 7px 14px; }
+  .tabbar select { font-size: 13px; padding: 6px 8px; }
+  .muted { color: var(--muted); }
+  .down { color: var(--down); }
+  .kpi .d.muted { color: var(--muted); }
+  .kpi .d.down { color: var(--down); }
+  .wide { grid-column: 1 / -1; }
+  .bar.wide { cursor: default; grid-template-columns: 110px 1fr minmax(90px, auto); }
+  .bar.wide .n { white-space: nowrap; }
+  .stackbar { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--accent-soft); }
+  .stackbar span { display: block; height: 100%; }
+  .vrow { margin: 12px 0; font-size: 13px; }
+  .vrow .vhead { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .vrow .vleg { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .list-row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0;
+              border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .list-row:last-child { border-bottom: 0; }
+  .list-row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  small.delta { margin-left: 5px; font-size: 11.5px; }
+  small.delta.up { color: var(--up); }
+  small.delta.down { color: var(--down); }
+  td a, .list-row a { color: var(--accent); text-decoration: none; }
+  td a:hover, .list-row a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -99,6 +127,15 @@
   </header>
 
   <div id="banner" class="banner" hidden></div>
+
+  <nav class="tabbar" id="tabbar" hidden>
+    <div class="seg" id="tabs">
+      <button type="button" data-t="dl">Téléchargements</button>
+      <button type="button" data-t="an">Analyses</button>
+      <button type="button" data-t="tr">Trafic</button>
+    </div>
+    <select id="repoSel" aria-label="Dépôt"><option value="">Tous les dépôts</option></select>
+  </nav>
 
   <div id="setup" class="card empty" hidden>
     Pour commencer, indiquez le compte GitHub à analyser dans les <b>Réglages</b>.
@@ -148,7 +185,6 @@
       <h2>Assets</h2>
       <div class="controls">
         <input type="search" id="q" placeholder="Filtrer par nom, tag, dépôt…">
-        <select id="repoSel"><option value="">Tous les dépôts</option></select>
         <select id="mode">
           <option value="all">Toutes les versions</option>
           <option value="latest">Dernière version seulement</option>
@@ -168,6 +204,55 @@
         </table>
       </div>
     </section>
+  </div>
+
+  <div id="tab-an" hidden>
+    <div id="an-empty" class="card empty" hidden></div>
+    <div id="an-content" hidden>
+      <section class="kpis" id="an-kpis"></section>
+      <section class="grid">
+        <div class="card wide">
+          <h2>Rythme quotidien (30 jours)</h2>
+          <svg id="an-chart"></svg>
+          <div class="note">Les jours partiels (premier et dernier relevé) sont atténués, les pics inhabituels sont en orange.</div>
+          <div id="an-spikes" style="margin-top:8px"></div>
+        </div>
+        <div class="card wide"><h2>Plus fortes progressions (7 jours)</h2><div id="an-movers"></div></div>
+        <div class="card"><h2>Systèmes</h2><div id="an-os"></div><div class="note">Déduits du nom des assets.</div></div>
+        <div class="card"><h2>Architectures</h2><div id="an-arch"></div><div class="note">Total des téléchargements (et gain sur 30 jours).</div></div>
+        <div class="card wide"><h2>Part de chaque version (30 jours)</h2><div id="an-versions"></div></div>
+        <div class="card wide"><h2>Releases : rythme et adoption</h2><div id="an-releases"></div><div class="note" id="an-releases-note"></div></div>
+        <div class="card wide"><h2>Assets dormants</h2><div id="an-dormant"></div></div>
+        <div class="card wide"><h2>Dépôts : étoiles, forks, abonnés</h2><div id="an-repos"></div><div class="note">Variations sur 7 et 30 jours, calculées à partir de vos relevés.</div></div>
+      </section>
+    </div>
+  </div>
+
+  <div id="tab-tr" hidden>
+    <div id="tr-empty" class="card empty" hidden></div>
+    <div id="tr-content" hidden>
+      <section class="kpis" id="tr-kpis"></section>
+      <section class="grid">
+        <div class="card wide">
+          <div class="chart-head">
+            <h2>Vues et clones par jour</h2>
+            <select id="trDays" aria-label="Période affichée" style="font-size:13px;padding:5px 8px">
+              <option value="7">7 jours</option>
+              <option value="14">14 jours</option>
+              <option value="30">30 jours</option>
+              <option value="90">90 jours</option>
+              <option value="0">Tout</option>
+            </select>
+          </div>
+          <svg id="tr-chart"></svg>
+          <div class="legend"><span><i style="background:var(--accent)"></i>Vues</span><span><i style="background:#e8590c"></i>Clones</span></div>
+          <div class="note" id="tr-note"></div>
+        </div>
+        <div class="card"><h2>Sites d’origine (14 derniers jours)</h2><div id="tr-refs"></div></div>
+        <div class="card"><h2>Pages les plus vues (14 derniers jours)</h2><div id="tr-paths"></div></div>
+        <div class="card wide"><h2>Par dépôt (période affichée)</h2><div id="tr-repos"></div></div>
+      </section>
+    </div>
   </div>
 </main>
 
@@ -195,6 +280,7 @@
     </select>
 
     <label class="check"><input type="checkbox" id="f-forks"> Inclure les forks</label>
+    <label class="check"><input type="checkbox" id="f-traffic"> Relever le trafic et les abonnés (demande un token)</label>
 
     <div class="form-err" id="f-err"></div>
     <div class="form-actions">
@@ -218,6 +304,11 @@ if (!["delta", "cum"].includes(chartMode)) chartMode = "delta";
 if (!["total", "repo", "tag", "asset"].includes(chartBy)) chartBy = "total";
 if (!["7", "30", "90", "365", "0"].includes(chartDays)) chartDays = "30";
 let lastSeries = null, seriesSeq = 0, resizeTimer = null;
+let tab = pref("tab", "dl");
+if (!["dl", "an", "tr"].includes(tab)) tab = "dl";
+let trDays = String(pref("trdays", "30"));
+if (!["7", "14", "30", "90", "0"].includes(trDays)) trDays = "30";
+let anData = null, trData = null, anSeq = 0, trSeq = 0;
 
 async function load() {
   try {
@@ -242,12 +333,12 @@ function render() {
 
   if (st.collecting) showBanner("info", "Collecte en cours auprès de GitHub…");
   else if (st.error) showBanner("err", st.error);
+  else if (st.warnings && st.warnings.length) showBanner("warn", st.warnings.join(" "));
   else showBanner("", "");
 
   $("setup").hidden = !!cfg.owner;
-  $("none").hidden = !(cfg.owner && !hasData && !st.collecting && !st.error);
   $("none").textContent = "Aucun asset de release trouvé pour « " + cfg.owner + " ».";
-  $("content").hidden = !hasData;
+  applyTab();
   $("refresh").disabled = !cfg.owner || st.collecting;
 
   let sub = cfg.owner || "";
@@ -258,6 +349,7 @@ function render() {
   $("sub").textContent = sub;
 
   if (!cfg.owner && !askedSetup) { askedSetup = true; openSettings(); }
+  if (!st.collecting && tab !== "dl") refreshActive();
   if (!hasData) return;
 
   const a = DATA.assets;
@@ -279,7 +371,7 @@ function render() {
   if (repoFilter && !(repoFilter in byRepo)) repoFilter = "";
   renderBars(byRepo);
   renderRepoSelect(byRepo);
-  loadSeries();
+  if (tab === "dl") loadSeries();
   renderTable();
 }
 
@@ -479,7 +571,7 @@ document.querySelectorAll("th[data-k]").forEach(th => th.onclick = () => {
 });
 $("q").oninput = renderTable;
 $("mode").onchange = renderTable;
-$("repoSel").onchange = e => { repoFilter = e.target.value; renderBars(byRepoNow()); loadSeries(); renderTable(); };
+$("repoSel").onchange = e => { repoFilter = e.target.value; renderBars(byRepoNow()); renderTable(); refreshActive(); };
 
 $("refresh").onclick = async () => {
   $("refresh").disabled = true;
@@ -497,13 +589,15 @@ function openSettings() {
   $("f-token-help").innerHTML =
     (c.token_source === "config" ? "Un token est enregistré (laissez vide pour le conserver). " :
      c.token_source === "env" ? "Un token est fourni par l'environnement du conteneur. " : "") +
-    'Sans token : 60 requêtes/heure et dépôts publics seulement. Avec un token : 5000/heure' +
-    ' et vos dépôts privés. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Créer un token</a>' +
-    ' (accès en lecture à « Contents » suffit).';
+    'Sans token : 60 requêtes/heure, dépôts publics seulement, pas de trafic. Avec un token : 5000/heure,' +
+    ' vos dépôts privés, et le trafic si le token a l’accès en écriture aux dépôts' +
+    ' (token classique : « repo » ; fine-grained : « Contents » et « Administration » en lecture).' +
+    ' <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Créer un token</a>.';
   const sel = $("f-refresh");
   sel.value = String(c.refresh_hours);
   if (sel.value !== String(c.refresh_hours)) sel.value = "6";
   $("f-forks").checked = !!c.include_forks;
+  $("f-traffic").checked = c.traffic !== false;
   $("f-err").textContent = "";
   $("dlg").showModal();
 }
@@ -512,7 +606,7 @@ $("f-cancel").onclick = () => $("dlg").close();
 $("cfgForm").onsubmit = async e => {
   e.preventDefault();
   const body = {owner: $("f-owner").value.trim(), refresh_hours: +$("f-refresh").value,
-                include_forks: $("f-forks").checked};
+                include_forks: $("f-forks").checked, traffic: $("f-traffic").checked};
   const tok = $("f-token").value.trim();
   if (tok) body.token = tok;
   if ($("f-clear").checked) body.clear_token = true;
@@ -529,6 +623,226 @@ $("cfgForm").onsubmit = async e => {
   } finally { $("f-save").disabled = false; }
 };
 
+/* ---- Onglets ---- */
+const fmt1 = n => new Intl.NumberFormat("fr-FR", {maximumFractionDigits: 1}).format(n);
+const dayFr = s => { const p = String(s).split("-"); return p[2] + "/" + p[1]; };
+const dateFr = ts => ts ? new Date(ts * 1000).toLocaleDateString("fr-FR") : "–";
+const signed = n => (n > 0 ? "+" : n < 0 ? "−" : "") + fmt(Math.abs(n));
+const delta = (n, label) => n ? `<small class="delta ${n > 0 ? "up" : "down"}">${signed(n)} (${label})</small>` : "";
+const GREYS = ["#868e96", "#9aa1a8", "#adb5bd", "#c0c6cc", "#d0d5da", "#dde1e5"];
+
+function applyTab() {
+  const has = !!(DATA && DATA.config.owner), hasData = !!(DATA && DATA.assets.length);
+  $("tabbar").hidden = !has;
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === tab));
+  $("content").hidden = !(has && hasData && tab === "dl");
+  $("tab-an").hidden = !(has && tab === "an");
+  $("tab-tr").hidden = !(has && tab === "tr");
+  $("none").hidden = !(has && !hasData && !DATA.status.collecting && !DATA.status.error && tab === "dl");
+}
+function refreshActive() {
+  if (!DATA || !DATA.config.owner) return;
+  if (tab === "an") loadAnalytics();
+  else if (tab === "tr") loadTraffic();
+  else if (DATA.assets.length) loadSeries();
+}
+function selectTab(t) { tab = t; setPref("tab", t); applyTab(); refreshActive(); }
+function redrawCharts() {
+  if (tab === "dl" && lastSeries) drawChart();
+  else if (tab === "an" && anData && anData.ready) drawDayBars($("an-chart"), anData.days, anData.spikes);
+  else if (tab === "tr" && trData && trData.available) drawTrafficChart($("tr-chart"), trData.days);
+}
+
+const kpi = (value, label, sub, cls) => `<div class="card kpi"><div class="v">${value}</div><div class="l">${label}</div>` +
+  (sub ? `<div class="d ${cls || ""}">${sub}</div>` : "") + `</div>`;
+const tbl = (heads, rows, num) => `<div class="scroll"><table><thead><tr>` +
+  heads.map((h, i) => `<th class="${num.includes(i) ? "num" : ""}" style="cursor:default">${h}</th>`).join("") +
+  `</tr></thead><tbody>${rows}</tbody></table></div>`;
+const noData = text => `<div class="muted">${text}</div>`;
+
+function chartBox(svg) {
+  const css = getComputedStyle(document.documentElement);
+  return {W: Math.max(280, Math.round(svg.getBoundingClientRect().width) || 500), H: 190,
+          P: {l: 46, r: 10, t: 10, b: 22}, mut: css.getPropertyValue("--muted").trim(),
+          grid: css.getPropertyValue("--line").trim(), accent: css.getPropertyValue("--accent").trim()};
+}
+const gridLines = (b, ticks, y) => ticks.map(v => `<line x1="${b.P.l}" x2="${b.W - b.P.r}" y1="${y(v)}" y2="${y(v)}" stroke="${b.grid}"/>` +
+  `<text x="${b.P.l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="${b.mut}">${fmt(v)}</text>`).join("");
+const edgeLabels = (b, first, last) =>
+  `<text x="${b.P.l}" y="${b.H - 6}" text-anchor="start" font-size="10" fill="${b.mut}">${first}</text>` +
+  `<text x="${b.W - b.P.r}" y="${b.H - 6}" text-anchor="end" font-size="10" fill="${b.mut}">${last}</text>`;
+
+function drawDayBars(svg, days, spikes) {
+  const b = chartBox(svg);
+  svg.setAttribute("viewBox", `0 0 ${b.W} ${b.H}`);
+  if (!days.length) { svg.innerHTML = ""; return; }
+  const spikeDays = new Set(spikes.map(x => x.day));
+  const ticks = niceTicks(Math.max(...days.map(d => d.downloads), 1)), top = ticks[ticks.length - 1];
+  const innerW = b.W - b.P.l - b.P.r, innerH = b.H - b.P.t - b.P.b;
+  const y = v => b.H - b.P.b - v / top * innerH;
+  const bw = innerW / days.length, gap = bw > 6 ? 2 : 0;
+  let out = gridLines(b, ticks, y);
+  days.forEach((d, i) => {
+    const h = d.downloads ? Math.max(1, d.downloads / top * innerH) : 0;
+    out += `<rect x="${(b.P.l + i * bw + gap / 2).toFixed(1)}" y="${(b.H - b.P.b - h).toFixed(1)}" ` +
+      `width="${Math.max(1, bw - gap).toFixed(1)}" height="${h.toFixed(1)}" ` +
+      `fill="${spikeDays.has(d.day) ? "#e8590c" : b.accent}" opacity="${d.partial ? 0.45 : 1}">` +
+      `<title>${dayFr(d.day)} : ${fmt(d.downloads)}${d.partial ? " (jour partiel)" : ""}</title></rect>`;
+  });
+  svg.innerHTML = out + edgeLabels(b, dayFr(days[0].day), dayFr(days[days.length - 1].day));
+}
+
+function drawTrafficChart(svg, days) {
+  const b = chartBox(svg);
+  svg.setAttribute("viewBox", `0 0 ${b.W} ${b.H}`);
+  if (days.length < 2) { svg.innerHTML = ""; return; }
+  const ticks = niceTicks(Math.max(...days.map(d => Math.max(d.views, d.clones)), 1)), top = ticks[ticks.length - 1];
+  const innerW = b.W - b.P.l - b.P.r, innerH = b.H - b.P.t - b.P.b, n = days.length;
+  const x = i => b.P.l + i / (n - 1) * innerW, y = v => b.H - b.P.b - v / top * innerH;
+  let out = gridLines(b, ticks, y);
+  [["views", b.accent, "Vues"], ["clones", "#e8590c", "Clones"]].forEach(([k, c, name]) => {
+    out += `<path d="${days.map((d, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(d[k]).toFixed(1)).join(" ")}" ` +
+      `fill="none" stroke="${c}" stroke-width="2"/>`;
+    if (n <= 45) days.forEach((d, i) => out += `<circle cx="${x(i).toFixed(1)}" cy="${y(d[k]).toFixed(1)}" r="2.5" fill="${c}">` +
+      `<title>${dayFr(d.day)} · ${name} : ${fmt(d[k])}</title></circle>`);
+  });
+  svg.innerHTML = out + edgeLabels(b, dayFr(days[0].day), dayFr(days[n - 1].day));
+}
+
+/* ---- Analyses ---- */
+async function loadAnalytics() {
+  const seq = ++anSeq;
+  const qs = new URLSearchParams({tz: -new Date().getTimezoneOffset()});
+  if (repoFilter) qs.set("repo", repoFilter);
+  try {
+    const d = await (await fetch("api/analytics?" + qs)).json();
+    if (seq !== anSeq) return;
+    anData = d; renderAnalytics();
+  } catch (e) { /* l'affichage précédent est conservé */ }
+}
+
+function renderAnalytics() {
+  const d = anData, ok = !!(d && d.ready);
+  $("an-empty").hidden = ok; $("an-content").hidden = !ok;
+  if (!ok) { $("an-empty").textContent = "Aucune donnée à analyser pour l’instant : lancez une collecte."; return; }
+  const r = d.rhythm;
+
+  let sub7, cls7 = "muted";
+  if (r.change_pct !== null) {
+    sub7 = (r.change_pct > 0 ? "+" : r.change_pct < 0 ? "−" : "") + fmt1(Math.abs(r.change_pct)) + " % vs les 7 jours précédents";
+    cls7 = r.change_pct >= 0 ? "" : "down";
+  } else sub7 = d.span_days < 14 ? "comparaison dès 14 jours de relevés" : "aucun téléchargement la semaine précédente";
+  $("an-kpis").innerHTML =
+    kpi(r.avg7 === null ? "–" : fmt1(r.avg7) + " <small class='muted'>/ jour</small>", "rythme sur 7 jours", sub7, cls7) +
+    kpi(fmt(r.total30), "téléchargements sur 30 jours", d.span_days < 30 ? "sur " + fmt1(d.span_days) + " j de relevés" : "", "muted") +
+    kpi(r.share_latest === null ? "–" : fmt1(r.share_latest) + " %", "sur la dernière version", r.share_latest === null ? "" : "des téléchargements des 30 jours", "muted") +
+    kpi(d.spikes_ready ? String(d.spikes.length) : "–", "pic(s) inhabituel(s)", d.spikes_ready ? "sur 30 jours" : "détection dès 14 jours de relevés", "muted");
+
+  drawDayBars($("an-chart"), d.days, d.spikes);
+  $("an-spikes").innerHTML = d.spikes.length ? d.spikes.map(x => `<div class="list-row"><span><b>${dayFr(x.day)}</b> · +${fmt(x.downloads)} ` +
+      `<span class="muted">(habituel : ${fmt1(x.typical)})</span></span>` +
+      `<span class="muted nm">${x.top ? esc(x.top.repo + " · " + x.top.asset) : ""}</span></div>`).join("")
+    : noData(d.spikes_ready ? "Aucun pic inhabituel sur les 30 derniers jours." : "Pas encore assez d’historique pour repérer des pics (14 jours de relevés).");
+
+  $("an-movers").innerHTML = d.movers.length ? tbl(["Asset", "Version", "7 derniers jours", "7 jours précédents", "Total"],
+    d.movers.map(m => `<tr><td class="asset">${esc(m.repo)} · ${esc(m.asset)}</td><td>${esc(m.tag)}</td>` +
+      `<td class="num up">+${fmt(m.gain7)}</td><td class="num">${m.prev7 === null ? "–" : fmt(m.prev7)}</td>` +
+      `<td class="num">${fmt(m.total)}</td></tr>`).join(""), [2, 3, 4])
+    : noData("Aucun téléchargement sur les 7 derniers jours.");
+
+  const bars = list => {
+    const max = Math.max(...list.map(e => e.total), 1);
+    return list.length ? list.map(e => `<div class="bar wide"><span class="name" title="${esc(e.name)}">${esc(e.name)}</span>` +
+      `<span class="track"><span class="fill" style="display:block;width:${(e.total / max * 100).toFixed(1)}%"></span></span>` +
+      `<span class="n">${fmt(e.total)} <span class="muted">(+${fmt(e.recent)})</span></span></div>`).join("") : noData("–");
+  };
+  $("an-os").innerHTML = bars(d.platforms.os);
+  $("an-arch").innerHTML = bars(d.platforms.arch);
+
+  $("an-versions").innerHTML = d.versions.map(v => {
+    let gi = 0;
+    const used = v.tags.filter(t => t.recent > 0);
+    const seg = used.map(t => `<span style="width:${t.share}%;background:${t.latest ? "var(--accent)" : GREYS[Math.min(gi++, GREYS.length - 1)]}" ` +
+      `title="${esc(t.tag)} : ${fmt(t.recent)}"></span>`).join("");
+    const leg = used.length ? used.map(t => `${esc(t.tag)}${t.latest ? " (dernière)" : ""} ${fmt1(t.share)} %`).join(" · ")
+      : "aucun téléchargement sur 30 jours";
+    return `<div class="vrow"><div class="vhead"><b>${esc(v.repo)}</b><span class="muted">${fmt(v.recent_total)} sur 30 j</span></div>` +
+      `<div class="stackbar">${seg}</div><div class="vleg">${leg}</div></div>`;
+  }).join("") || noData("–");
+
+  $("an-releases").innerHTML = d.releases.length ? tbl(
+    ["Dépôt", "Version", "Publiée", "Âge", "Total", "Moy. / jour", "7 premiers j", "30 premiers j", "7 derniers j"],
+    d.releases.slice(0, 15).map(x => `<tr><td>${esc(x.repo)}</td><td>${esc(x.tag)}</td><td>${dateFr(x.published)}</td>` +
+      `<td class="num">${x.age_days === null ? "–" : fmt1(x.age_days) + " j"}</td><td class="num">${fmt(x.total)}</td>` +
+      `<td class="num">${x.per_day === null ? "–" : fmt1(x.per_day)}</td>` +
+      `<td class="num">${x.d7 === null ? "–" : fmt(x.d7)}</td><td class="num">${x.d30 === null ? "–" : fmt(x.d30)}</td>` +
+      `<td class="num">${fmt(x.last7)}</td></tr>`).join(""), [3, 4, 5, 6, 7, 8]) : noData("–");
+  $("an-releases-note").textContent = "« 7 / 30 premiers jours » n’est connu que pour les releases publiées après le début des relevés (le " +
+    dateFr(d.first_ts) + "), à quelques heures près.";
+
+  $("an-dormant").innerHTML = d.dormant === null
+    ? noData("Disponible après 30 jours de relevés (" + fmt1(d.span_days) + " j actuellement).")
+    : d.dormant.length ? tbl(["Asset", "Version", "Total", "Dernier téléchargement observé"],
+        d.dormant.map(x => `<tr><td class="asset">${esc(x.repo)} · ${esc(x.asset)}</td><td>${esc(x.tag)}</td>` +
+          `<td class="num">${fmt(x.total)}</td><td class="num">${x.last_active ? dayFr(x.last_active) : "aucun depuis le début des relevés"}</td></tr>`).join(""), [2, 3])
+      : noData("Aucun asset dormant : tous ont été téléchargés ces 30 derniers jours.");
+
+  $("an-repos").innerHTML = d.repos.length ? tbl(["Dépôt", "Étoiles", "Forks", "Abonnés", "Tickets ouverts"],
+    d.repos.map(x => `<tr><td>${esc(x.repo)}</td>` +
+      `<td class="num">${x.stars === null ? "–" : fmt(x.stars)}${delta(x.stars_7, "7 j")}${delta(x.stars_30, "30 j")}</td>` +
+      `<td class="num">${x.forks === null ? "–" : fmt(x.forks)}${delta(x.forks_7, "7 j")}${delta(x.forks_30, "30 j")}</td>` +
+      `<td class="num">${x.watchers === null ? "–" : fmt(x.watchers)}</td>` +
+      `<td class="num">${x.issues === null ? "–" : fmt(x.issues)}</td></tr>`).join(""), [1, 2, 3, 4])
+    : noData("Pas encore de relevé des dépôts.");
+}
+
+/* ---- Trafic ---- */
+async function loadTraffic() {
+  const seq = ++trSeq;
+  const qs = new URLSearchParams({days: trDays});
+  if (repoFilter) qs.set("repo", repoFilter);
+  try {
+    const d = await (await fetch("api/traffic?" + qs)).json();
+    if (seq !== trSeq) return;
+    trData = d; renderTraffic();
+  } catch (e) { /* l'affichage précédent est conservé */ }
+}
+
+function renderTraffic() {
+  const d = trData, cfg = DATA.config, ok = !!(d && d.available);
+  $("tr-empty").hidden = ok; $("tr-content").hidden = !ok;
+  if (!ok) {
+    $("tr-empty").innerHTML = !cfg.traffic ? "Le relevé du trafic est désactivé dans les <b>Réglages</b>."
+      : !cfg.token_source ? "Le trafic (vues, clones, sites d’origine) demande un token GitHub avec l’accès en écriture aux dépôts : ajoutez-le dans les <b>Réglages</b>."
+      : "Aucune donnée de trafic pour l’instant. Si un avertissement signale un refus de GitHub, le token n’a pas les droits nécessaires (accès en écriture aux dépôts, ou permission « Administration » en lecture).";
+    return;
+  }
+  const t = d.totals;
+  $("tr-kpis").innerHTML = kpi(fmt(t.views), "vues de pages", "", "") +
+    kpi(fmt(t.view_uniques), "visiteurs uniques", "somme des jours", "muted") +
+    kpi(fmt(t.clones), "clones", "", "") + kpi(fmt(t.clone_uniques), "clones uniques", "somme des jours", "muted");
+  $("trDays").value = trDays;
+  drawTrafficChart($("tr-chart"), d.days);
+  $("tr-note").textContent = (d.days.length < 2 ? "Pas encore assez de jours pour tracer une courbe. " : "") +
+    "Historique conservé : " + d.stored_days + " jour(s). GitHub ne fournit que les 14 derniers jours, l’appli complète à chaque collecte. " +
+    "Un visiteur actif plusieurs jours est compté une fois par jour dans les uniques.";
+
+  const refMax = Math.max(...d.referrers.map(x => x.count), 1);
+  $("tr-refs").innerHTML = d.referrers.length ? d.referrers.map(x => `<div class="bar wide"><span class="name" title="${esc(x.referrer)}">${esc(x.referrer)}</span>` +
+    `<span class="track"><span class="fill" style="display:block;width:${(x.count / refMax * 100).toFixed(1)}%"></span></span>` +
+    `<span class="n">${fmt(x.count)} <span class="muted">(${fmt(x.uniques)} uniques)</span></span></div>`).join("")
+    : noData("Aucun site d’origine enregistré.");
+  $("tr-paths").innerHTML = d.paths.length ? d.paths.map(x => {
+    const link = x.path.startsWith("/") ? `<a href="https://github.com${esc(x.path)}" target="_blank" rel="noopener">${esc(x.path)}</a>` : esc(x.path);
+    return `<div class="list-row"><span class="nm" title="${esc(x.title)}">${link}</span>` +
+      `<span class="n" style="white-space:nowrap">${fmt(x.count)} <span class="muted">(${fmt(x.uniques)} uniques)</span></span></div>`;
+  }).join("") : noData("Aucune page enregistrée.");
+  $("tr-repos").innerHTML = d.repos.length ? tbl(["Dépôt", "Vues", "Visiteurs uniques", "Clones", "Clones uniques"],
+    d.repos.map(x => `<tr><td>${esc(x.repo)}</td><td class="num">${fmt(x.views)}</td><td class="num">${fmt(x.view_uniques)}</td>` +
+      `<td class="num">${fmt(x.clones)}</td><td class="num">${fmt(x.clone_uniques)}</td></tr>`).join(""), [1, 2, 3, 4])
+    : noData("–");
+}
+
 function syncChartControls() {
   document.querySelectorAll("#mode-seg button").forEach(b => b.classList.toggle("on", b.dataset.m === chartMode));
   $("by").value = chartBy;
@@ -541,8 +855,11 @@ $("by").onchange = e => { chartBy = e.target.value; setPref("by", chartBy); load
 $("days").onchange = e => { chartDays = e.target.value; setPref("days", chartDays); loadSeries(); };
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if (lastSeries) drawChart(); }, 150);
+  resizeTimer = setTimeout(redrawCharts, 150);
 });
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => selectTab(b.dataset.t));
+$("trDays").value = trDays;
+$("trDays").onchange = e => { trDays = e.target.value; setPref("trdays", trDays); loadTraffic(); };
 syncChartControls();
 load();
 </script>

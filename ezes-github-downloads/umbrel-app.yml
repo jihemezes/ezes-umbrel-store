@@ -2,7 +2,7 @@ manifestVersion: 1
 id: ezes-github-downloads
 category: developer
 name: GitHub Downloads
-version: "1.1.0"
+version: "1.2.0"
 tagline: Combien de fois vos releases GitHub ont-elles été téléchargées ?
 icon: https://raw.githubusercontent.com/jihemezes/ezes-umbrel-store/main/ezes-github-downloads/icon.svg
 description: >-
@@ -10,12 +10,15 @@ description: >-
   release de tous les dépôts d'un compte ou d'une organisation GitHub, garde
   l'historique et l'affiche dans un tableau de bord : total, classement des
   assets, répartition par dépôt, évolution dans le temps et progression depuis
-  le dernier relevé.
+  le dernier relevé. Un onglet Analyses (rythme, pics, plateformes, adoption des
+  versions, assets dormants) et un onglet Trafic (vues, clones, sites d'origine)
+  complètent le tableau de bord.
 
 
   Au premier lancement, indiquez simplement le compte GitHub à analyser. Un
   token est facultatif (il permet d'inclure vos dépôts privés et d'éviter la
-  limite de 60 requêtes par heure).
+  limite de 60 requêtes par heure) ; il est nécessaire pour le trafic, avec
+  l'accès en écriture aux dépôts.
 developer: Jean-Michel EZES
 website: https://jmezes.fr
 dependencies: []
@@ -27,11 +30,16 @@ path: ""
 defaultUsername: ""
 defaultPassword: ""
 releaseNotes: >-
-  Nouveau graphique : téléchargements par jour (ou par semaine/mois sur les
-  longues périodes) ou cumul, avec courbes par dépôt, par version ou par asset
-  et choix de la période (7 jours à tout l'historique).
+  Nouvel onglet Analyses : rythme sur 7 jours et tendance, pics inhabituels,
+  plus fortes progressions, répartition par système et architecture, part de
+  chaque version, adoption des releases (7 et 30 premiers jours), assets
+  dormants, étoiles, forks et abonnés des dépôts.
 
-  Export CSV depuis l'interface : dernier relevé ou historique complet,
-  filtrable par dépôt.
+  Nouvel onglet Trafic (avec un token ayant l'accès en écriture aux dépôts) :
+  vues et clones par jour, sites d'origine et pages les plus vues, avec un
+  historique conservé au-delà des 14 jours fournis par GitHub.
+
+  Le relevé du trafic est facultatif (Réglages) et ne peut pas empêcher le
+  relevé des téléchargements. Vos données existantes sont conservées.
 submitter: Jean-Michel EZES
 submission: https://github.com/jihemezes/ezes-umbrel-store
