@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=8080
 
 WORKDIR /app
-COPY ghdl.py index.html ./
+COPY ghdl.py index.html favicon.svg ./
 
 RUN mkdir -p /data
 VOLUME /data

@@ -1137,6 +1137,9 @@ class Handler(BaseHTTPRequestHandler):
         path, query = url.path, parse_qs(url.query)
         if path in ("/", "/index.html"):
             self._send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
+        elif path in ("/favicon.svg", "/favicon.ico"):
+            self._send(200, (HERE / "favicon.svg").read_bytes(), "image/svg+xml",
+                       {"Cache-Control": "public, max-age=86400"})
         elif path == "/api/data":
             self._send(200, api_payload())
         elif path == "/api/series":

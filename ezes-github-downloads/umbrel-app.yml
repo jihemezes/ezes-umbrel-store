@@ -2,7 +2,7 @@ manifestVersion: 1
 id: ezes-github-downloads
 category: developer
 name: GitHub Downloads
-version: "1.2.0"
+version: "1.2.1"
 tagline: Combien de fois vos releases GitHub ont-elles été téléchargées ?
 icon: https://raw.githubusercontent.com/jihemezes/ezes-umbrel-store/main/ezes-github-downloads/icon.svg
 description: >-
@@ -30,6 +30,8 @@ path: ""
 defaultUsername: ""
 defaultPassword: ""
 releaseNotes: >-
+  L'icône de l'application s'affiche maintenant dans l'onglet du navigateur.
+
   Nouvel onglet Analyses : rythme sur 7 jours et tendance, pics inhabituels,
   plus fortes progressions, répartition par système et architecture, part de
   chaque version, adoption des releases (7 et 30 premiers jours), assets
